@@ -57,17 +57,18 @@ func init() {
 
 type call_argument struct {
 	v *luar.LuaObject
+	l *lua.State
 }
 
-func wrap_call(arguments args.Argument) interface{} {
+func wrap_call(arguments args.Argument) func(state *lua.State) int {
 	return func(state *lua.State) int {
 		defer arguments.Free()
-		a, err := LuaToArgument(state, 1)
+		a, err := LuaToArgument(state, 1, false)
 		if err != nil {
 			panic(err)
 		}
 		call := arguments.Value().(args.Call)
-		if a, err = call.Call(a); err != nil {
+		if a, err = call.Call(args.ArgumentList{a}); err != nil {
 			panic(err)
 		} else if a != nil {
 			PushArgument(state, a)
@@ -78,29 +79,28 @@ func wrap_call(arguments args.Argument) interface{} {
 	}
 }
 
-func (a *call_argument) Call(arguments args.Argument) (args.Argument, error) {
+func (a *call_argument) Call(arguments args.ArgumentList) (args.Argument, error) {
 
-	var out []interface{}
+	top := a.l.GetTop()
 
-	defer arguments.Free()
-	val := arguments.Value()
-	if arguments.Type() == args.CallType {
-		val = wrap_call(arguments)
-	}
+	a.v.Push()
+	defer a.l.SetTop(top)
+	for _, arg := range arguments {
+		if arg.Type() == args.CallType {
+			a.l.PushGoFunction(wrap_call(arg))
+		} else {
+			if err := PushArgument(a.l, arg); err != nil {
 
-	if err := a.v.Call(&out, val); err != nil {
-		return nil, err
-	}
-
-	var arg args.Argument
-	var err error
-	if len(out) > 0 {
-		if arg, err = args.NewArgument(out[0]); err != nil {
-			return nil, err
+				return nil, err
+			}
 		}
 	}
 
-	return arg, nil
+	if err := a.l.Call(arguments.Len(), 1); err != nil {
+		return nil, err
+	}
+
+	return LuaToArgument(a.l, 1, false)
 
 }
 
@@ -108,10 +108,11 @@ func (a *call_argument) Free() {
 	if a.v != nil {
 		a.v.Close()
 		a.v = nil
+		a.l = nil
 	}
 }
 
-func LuaToArgument(state *lua.State, i int) (args.Argument, error) {
+func LuaToArgument(state *lua.State, i int, one bool) (args.Argument, error) {
 	var arguments []args.Argument
 	for {
 		if state.IsTable(i) || state.IsGoStruct(i) {
@@ -122,47 +123,72 @@ func LuaToArgument(state *lua.State, i int) (args.Argument, error) {
 			} else if err != ErrCannotConvert {
 				return nil, err
 			}
-
-			var out luar.Map
+			// Is converted to ArgumentMap in Argument Constructor
+			var out map[string]interface{}
 			if err := luar.LuaToGo(state, i, &out); err != nil {
 				return nil, err
 			}
-			arguments = append(arguments, args.NewArgumentOrNil(out))
-
+			arguments = append(arguments, args.Must(out))
 		} else if state.IsBoolean(i) {
-			arguments = append(arguments, args.NewArgumentOrNil(state.ToBoolean(i)))
+			arguments = append(arguments, args.Must(state.ToBoolean(i)))
 		} else if state.IsString(i) {
-			arguments = append(arguments, args.NewArgumentOrNil(state.ToString(i)))
+			arguments = append(arguments, args.Must(state.ToString(i)))
 		} else if state.IsNumber(i) {
-			arguments = append(arguments, args.NewArgumentOrNil(state.ToNumber(i)))
+			arguments = append(arguments, args.Must(state.ToNumber(i)))
 		} else if state.IsNone(i) {
+			//arguments = append(arguments, args.Undefined())
 			break
 		} else if state.IsFunction(i) {
-			arguments = append(arguments, args.NewArgumentOrNil(&call_argument{luar.NewLuaObject(state, i)}))
+			arguments = append(arguments, args.Must(&call_argument{luar.NewLuaObject(state, i), state}))
+		} else {
+			break
 		}
 
 		i++
+		if one {
+			return arguments[0], nil
+		}
 	}
 
-	return args.NewArgument(arguments)
+	return args.New(arguments)
+}
+
+func isNumeric(a args.Argument) bool {
+	switch a.Type() {
+	case args.Int16Type, args.Int32Type, args.Int64Type, args.Int8Type, args.IntType,
+		args.Uint16Type, args.Uint32Type, args.Uint64Type, args.Uint8Type, args.UintType,
+		args.Float32Type, args.Float64Type:
+		return true
+	}
+	return false
 }
 
 func PushArgument(state *lua.State, arg args.Argument) error {
 	if arg == nil {
 		return nil
+	} else if !arg.Valid() {
+		return errors.New("cannot push undefined value")
 	}
 
 	switch arg.Type() {
-	case args.StringType, args.NumberType, args.BoolType:
+	case args.StringType, args.BoolType, args.StringSliceType, args.MapType:
 		luar.GoToLua(state, arg.Value())
+	case args.NilType:
+		state.PushNil()
 	case args.CallType:
 		luar.GoToLua(state, wrap_call(arg))
-	case args.ArgumentListType:
-		return PushArgumentList(state, arg.Value().(args.ArgumentList))
+	case args.ByteSliceType:
+		state.PushBytes(arg.Value().([]byte))
+	case args.ArgumentListType, args.ArgumentSliceType:
+		return PushArgumentSlice(state, arg, false)
 	case args.ArgumentMapType:
 		return PushArgumentMap(state, arg.Value().(args.ArgumentMap))
-
 	default:
+		if isNumeric(arg) {
+			luar.GoToLua(state, arg.Value())
+			return nil
+		}
+
 		if err := convert_push(arg, state); err != nil {
 			if err != ErrCannotConvert {
 				return err
@@ -174,8 +200,43 @@ func PushArgument(state *lua.State, arg args.Argument) error {
 	return nil
 }
 
-func PushArgumentList(state *lua.State, arg args.ArgumentList) error {
+func PushArgumentSlice(state *lua.State, arg args.Argument, spread bool) error {
+	if !arg.Is(args.ArgumentSliceType, args.ArgumentListType) {
+		return errors.New("not a slice type")
+	}
 	top := state.GetTop()
+	var val []args.Argument
+	if arg.Type() == args.ArgumentSliceType {
+		val = arg.Value().([]args.Argument)
+	} else {
+		val = []args.Argument(arg.Value().(args.ArgumentList))
+	}
+
+	if spread {
+		for _, a := range val {
+			if err := PushArgument(state, a); err != nil {
+				state.SetTop(0)
+				return err
+			}
+		}
+	} else {
+
+		l := len(val)
+		state.CreateTable(l, 0)
+		for i := 0; i < l; i++ {
+			if err := PushArgument(state, val[i]); err != nil {
+				state.SetTop(top)
+				return err
+			}
+			state.RawSeti(-2, i)
+		}
+	}
+
+	return nil
+}
+
+func PushArgumentList(state *lua.State, arg args.ArgumentList) error {
+	/*top := state.GetTop()
 	l := len(arg)
 	state.CreateTable(l, 0)
 	for i := 0; i < l; i++ {
@@ -184,9 +245,9 @@ func PushArgumentList(state *lua.State, arg args.ArgumentList) error {
 			return err
 		}
 		state.RawSeti(-2, i)
-	}
+	}*/
 
-	return nil
+	return PushArgumentSlice(state, args.Must(arg), true)
 }
 
 func PushArgumentMap(state *lua.State, arg args.ArgumentMap) error {

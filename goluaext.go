@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/aarzilli/golua/lua"
+	uuid "github.com/satori/go.uuid"
 	"github.com/stevedonovan/luar"
 )
 
@@ -105,7 +106,18 @@ func createHash(state *lua.State) {
 
 			str := state.ToString(1)
 
+			state.CreateTable(0, 1)
 			state.PushBytes(h.Sum([]byte(str)))
+			state.SetField(-2, "bytes")
+			state.CreateTable(0, 1)
+			state.SetMetaMethod("__tostring", func(state *lua.State) int {
+				state.GetField(1, "bytes")
+				v := state.ToBytes(-1)
+				state.PushString(fmt.Sprintf("%x", v))
+				return 1
+			})
+
+			state.SetMetaTable(-2)
 
 			return 1
 		}
@@ -124,6 +136,71 @@ func createHash(state *lua.State) {
 	state.GetGlobal("util")
 	state.PushValue(top)
 	state.SetField(-2, "hash")
+}
+
+func createUuid(state *lua.State) {
+
+	hasher := func(version string) func(state *lua.State) int {
+
+		/*var h hash.Hash
+		switch algo {
+		case "v4":
+			h = uuid.NewV4()
+		case "v5":
+			h = sha256.New()
+		case "sha512":
+			h = sha512.New()
+		}*/
+
+		return func(state *lua.State) int {
+
+			var id uuid.UUID
+			switch version {
+			case "v1":
+				id = uuid.NewV1()
+			/*case "v2":
+				id = uuid.NewV2()
+			case "v3":
+				id = uuid.NewV3()*/
+			case "v4":
+				id = uuid.NewV4()
+				/*case "v5":
+				id = uuid.NewV5()*/
+			}
+			//str := state.ToString(1)
+
+			state.CreateTable(0, 2)
+			state.PushBytes(id.Bytes())
+			state.SetField(-2, "bytes")
+			state.PushBoolean(id != uuid.Nil)
+			state.SetField(-2, "valid")
+			state.CreateTable(0, 1)
+			state.SetMetaMethod("__tostring", func(state *lua.State) int {
+				state.GetField(1, "bytes")
+				v := state.ToBytes(-1)
+				state.PushString(uuid.FromBytesOrNil(v).String())
+				return 1
+			})
+
+			state.SetMetaTable(-2)
+
+			return 1
+		}
+	}
+
+	state.CreateTable(0, 0)
+	state.CreateTable(0, 1)
+	state.SetMetaMethod("__index", func(state *lua.State) int {
+		method := state.ToString(2)
+		state.PushGoFunction(hasher(method))
+		return 1
+	})
+	state.SetMetaTable(-2)
+	top := state.GetTop()
+
+	state.GetGlobal("util")
+	state.PushValue(top)
+	state.SetField(-2, "uuid")
 }
 
 func Init() *lua.State {
@@ -182,6 +259,7 @@ func Init() *lua.State {
 
 	createHttp(state)
 	createHash(state)
+	createUuid(state)
 
 	state.MustDoString(string(MustAsset("prelude.lua")))
 
