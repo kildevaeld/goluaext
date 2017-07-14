@@ -15,7 +15,6 @@ type Converter interface {
 	Pop(state *lua.State, index int) (args.Argument, error)
 }
 
-
 func RegisterConverter(hook args.Type, fn Converter) error {
 	if _, ok := _converters[hook]; ok {
 		return errors.New("converter already exists")
@@ -49,7 +48,6 @@ func convert_pop(state *lua.State, index int) (args.Argument, error) {
 
 	return nil, ErrCannotConvert
 }
-
 
 type call_argument struct {
 	v *luar.LuaObject
@@ -232,16 +230,6 @@ func PushArgumentSlice(state *lua.State, arg args.Argument, spread bool) error {
 }
 
 func PushArgumentList(state *lua.State, arg args.ArgumentList) error {
-	/*top := state.GetTop()
-	l := len(arg)
-	state.CreateTable(l, 0)
-	for i := 0; i < l; i++ {
-		if err := PushArgument(state, arg[i]); err != nil {
-			state.SetTop(top)
-			return err
-		}
-		state.RawSeti(-2, i)
-	}*/
 
 	return PushArgumentSlice(state, args.Must(arg), true)
 }
@@ -259,4 +247,25 @@ func PushArgumentMap(state *lua.State, arg args.ArgumentMap) error {
 	}
 
 	return nil
+}
+
+func CreateTable(state *lua.State, m luar.Map, meta MetaMap) {
+	state.CreateTable(0, len(m))
+	for k, g := range m {
+		if bs, ok := g.([]byte); ok {
+			state.PushBytes(bs)
+		} else {
+			luar.GoToLua(state, g)
+		}
+
+		state.SetField(-2, k)
+	}
+
+	if meta != nil {
+		state.CreateTable(0, len(meta))
+		for k, m := range meta {
+			state.SetMetaMethod(k, m)
+		}
+		state.SetMetaTable(-2)
+	}
 }

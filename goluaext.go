@@ -43,24 +43,12 @@ var Globals = []string{
 	"unsafe_xpcall",
 }
 
-type LuaCallback func(state *lua.State) int
-
 type httpOptions struct {
 	body []byte
 }
 
 func uuidLoader(state *lua.State) int {
 	hasher := func(version string) func(state *lua.State) int {
-
-		/*var h hash.Hash
-		switch algo {
-		case "v4":
-			h = uuid.NewV4()
-		case "v5":
-			h = sha256.New()
-		case "sha512":
-			h = sha512.New()
-		}*/
 
 		return func(state *lua.State) int {
 
@@ -79,33 +67,29 @@ func uuidLoader(state *lua.State) int {
 			}
 			//str := state.ToString(1)
 
-			state.CreateTable(0, 2)
-			state.PushBytes(id.Bytes())
-			state.SetField(-2, "bytes")
-			state.PushBoolean(id != uuid.Nil)
-			state.SetField(-2, "valid")
-			state.CreateTable(0, 1)
-			state.SetMetaMethod("__tostring", func(state *lua.State) int {
-				state.GetField(1, "bytes")
-				v := state.ToBytes(-1)
-				state.PushString(uuid.FromBytesOrNil(v).String())
-				return 1
+			CreateTable(state, luar.Map{
+				"bytes": id.Bytes(),
+				"valid": id != uuid.Nil,
+			}, MetaMap{
+				MetaToString: func(state *lua.State) int {
+					state.GetField(1, "bytes")
+					v := state.ToBytes(-1)
+					state.PushString(uuid.FromBytesOrNil(v).String())
+					return 1
+				},
 			})
-
-			state.SetMetaTable(-2)
 
 			return 1
 		}
 	}
 
-	state.CreateTable(0, 0)
-	state.CreateTable(0, 1)
-	state.SetMetaMethod("__index", func(state *lua.State) int {
-		method := state.ToString(2)
-		state.PushGoFunction(hasher(method))
-		return 1
+	CreateTable(state, nil, MetaMap{
+		MetaIndex: func(state *lua.State) int {
+			method := state.ToString(2)
+			state.PushGoFunction(hasher(method))
+			return 1
+		},
 	})
-	state.SetMetaTable(-2)
 
 	return 1
 }
@@ -135,31 +119,28 @@ func hashLoader(state *lua.State) int {
 
 			str := state.ToString(1)
 
-			state.CreateTable(0, 1)
-			state.PushBytes(h.Sum([]byte(str)))
-			state.SetField(-2, "bytes")
-			state.CreateTable(0, 1)
-			state.SetMetaMethod("__tostring", func(state *lua.State) int {
-				state.GetField(1, "bytes")
-				v := state.ToBytes(-1)
-				state.PushString(fmt.Sprintf("%x", v))
-				return 1
+			CreateTable(state, luar.Map{
+				"bytes": h.Sum([]byte(str)),
+			}, MetaMap{
+				MetaToString: func(state *lua.State) int {
+					state.GetField(1, "bytes")
+					v := state.ToBytes(-1)
+					state.PushString(fmt.Sprintf("%x", v))
+					return 1
+				},
 			})
-
-			state.SetMetaTable(-2)
 
 			return 1
 		}
 	}
 
-	state.CreateTable(0, 0)
-	state.CreateTable(0, 1)
-	state.SetMetaMethod("__index", func(state *lua.State) int {
-		method := state.ToString(2)
-		state.PushGoFunction(hasher(method))
-		return 1
+	CreateTable(state, nil, MetaMap{
+		MetaIndex: func(state *lua.State) int {
+			method := state.ToString(2)
+			state.PushGoFunction(hasher(method))
+			return 1
+		},
 	})
-	state.SetMetaTable(-2)
 
 	return 1
 
