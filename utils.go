@@ -87,7 +87,7 @@ func (a *call_argument) Call(arguments args.ArgumentList) (args.Argument, error)
 	defer a.l.SetTop(top)
 	for _, arg := range arguments {
 		if arg.Type() == args.CallType {
-			a.l.PushGoFunction(wrap_call(arg))
+			a.l.PushGoClosure(wrap_call(arg))
 		} else {
 			if err := PushArgument(a.l, arg); err != nil {
 
