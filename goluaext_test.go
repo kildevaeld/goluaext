@@ -10,14 +10,40 @@ import (
 func TestLua(t *testing.T) {
 
 	state := Init()
-	state.OpenLibs()
+	//state.OpenLibs()
 	if err := state.DoString(`
 --util.http.get("http://google.com")
-print(util.hash.sha256("Hello, World!"))
-print(util.uuid.v3().valid)
+local hash = require 'hash'
+local uuid = require 'uuid'
+print(hash.sha256("Hello, World!"))
+print(uuid.v4())
 function test(msg)
 	print("test called", msg)
 end
+
+local json = require 'json'
+local yaml = require 'yaml'
+
+local js = json.encode({
+	test = "hello json"
+})
+
+print(js)
+
+local l = json.decode(js)
+
+print(l.test)
+
+print(yaml.encode({
+	test = "hello yaml"
+}))
+
+local http = require 'http'
+
+js = json.encode("rapper")
+
+print(json.decode(js))
+
 
 	`); err != nil {
 		t.Fatal(err)

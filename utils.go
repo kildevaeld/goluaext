@@ -15,7 +15,6 @@ type Converter interface {
 	Pop(state *lua.State, index int) (args.Argument, error)
 }
 
-var _converters map[args.Type]Converter
 
 func RegisterConverter(hook args.Type, fn Converter) error {
 	if _, ok := _converters[hook]; ok {
@@ -51,9 +50,6 @@ func convert_pop(state *lua.State, index int) (args.Argument, error) {
 	return nil, ErrCannotConvert
 }
 
-func init() {
-	_converters = make(map[args.Type]Converter)
-}
 
 type call_argument struct {
 	v *luar.LuaObject
