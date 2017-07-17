@@ -20,17 +20,17 @@ function class(base, init)
    -- expose a constructor which can be called by <classname>(<args>)
    local mt = {}
    mt.__call = function(class_tbl, ...)
-   local obj = {}
-   setmetatable(obj,c)
-   if init then
-      init(obj,...)
-   else 
-      -- make sure that any stuff from the base class is initialized!
-      if base and base.init then
-      base.init(obj, ...)
-      end
-   end
-   return obj
+    local obj = {}
+    setmetatable(obj,c)
+    if init then
+        init(obj,...)
+    else 
+        -- make sure that any stuff from the base class is initialized!
+        if base and base.init then
+        base.init(obj, ...)
+        end
+    end
+    return obj
    end
    c.init = init
    c.is_a = function(self, klass)
@@ -43,26 +43,4 @@ function class(base, init)
    end
    setmetatable(c, mt)
    return c
-end
-
--- globals.lua
--- show all global variables
-
-local seen={}
-
-function dump(t,i)
-	seen[t]=true
-	local s={}
-	local n=0
-	for k in pairs(t) do
-		n=n+1 s[n]=k
-	end
-	table.sort(s)
-	for k,v in ipairs(s) do
-		print(i,v)
-		v=t[v]
-		if type(v)=="table" and not seen[v] then
-			dump(v,i.."\t")
-		end
-	end
 end

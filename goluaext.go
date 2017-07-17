@@ -1,4 +1,4 @@
-//go:generate go-bindata -pkg goluaext -nometadata -o prelude.go prelude.lua
+//go:generate go-bindata -pkg goluaext -nometadata -o prelude.go scripts
 
 package goluaext
 
@@ -267,6 +267,7 @@ func httpLoader(state *lua.State) int {
 		method = strings.ToUpper(method)
 
 		return func(state *lua.State) int {
+
 			if !state.IsString(1) {
 				panic(errors.New("#1 argument must be a string"))
 			}
@@ -295,15 +296,23 @@ func httpLoader(state *lua.State) int {
 			}
 
 			client := &http.Client{}
-			if resp, err = client.Do(req); err != nil {
-				//return nil, err.Error()
+			if resp, err = client.Do(req); err == nil {
+				bs, err = ioutil.ReadAll(resp.Body)
 			}
 
-			if bs, err = ioutil.ReadAll(resp.Body); err != nil {
-				//return nil, err.Error()
+			if err == nil {
+				luar.GoToLua(state, luar.Map{
+					"status":     resp.StatusCode,
+					"statusText": resp.Status,
+					"body":       string(bs),
+				})
+				state.PushNil()
+			} else {
+				state.PushNil()
+				state.PushString(err.Error())
 			}
-			fmt.Printf("%s", bs)
-			return 0
+
+			return 2
 		}
 	}
 
@@ -327,7 +336,11 @@ func Init() *lua.State {
 
 	pre := state.GetTop()
 
-	state.CreateTable(0, len(_loaders))
+	state.GetField(-1, "preload")
+	if !state.IsTable(-1) {
+		state.CreateTable(0, len(_loaders))
+	}
+
 	for k, loader := range _loaders {
 		state.PushGoClosure(lua.LuaGoFunction(loader))
 		state.SetField(-2, k)
@@ -336,7 +349,8 @@ func Init() *lua.State {
 	state.SetField(pre, "preload")
 	state.SetTop(top)
 
-	state.MustDoString(string(MustAsset("prelude.lua")))
+	state.MustDoString(string(MustAsset("scripts/prelude.lua")))
+	RegisterLuaModule(state, "inspect", string(MustAsset("scripts/inspect.lua")), true)
 
 	return state
 

@@ -44,6 +44,8 @@ js = json.encode("rapper")
 
 print(json.decode(js))
 
+http.get("https://google.com")
+
 
 	`); err != nil {
 		t.Fatal(err)

@@ -269,3 +269,15 @@ func CreateTable(state *lua.State, m luar.Map, meta MetaMap) {
 		state.SetMetaTable(-2)
 	}
 }
+
+func Require(state *lua.State, module string) error {
+	state.GetGlobal("require")
+	if !state.IsFunction(-1) {
+		return errors.New("require not defined")
+	}
+
+	state.PushString(module)
+
+	return state.Call(1, 1)
+
+}
