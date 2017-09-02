@@ -106,6 +106,17 @@ func (a *call_argument) Free() {
 	}
 }
 
+func luaInterfaceMapToArgument(state *lua.State, m map[string]interface{}) map[string]interface{} {
+	for k, v := range m {
+		if t, ok := v.(*luar.LuaObject); ok {
+			m[k] = &call_argument{t, state}
+		} else if t, ok := v.(map[string]interface{}); ok {
+			m[k] = luaInterfaceMapToArgument(state, t)
+		}
+	}
+	return m
+}
+
 func LuaToArgument(state *lua.State, i int, one bool) (args.Argument, error) {
 	var arguments []args.Argument
 	for {
@@ -122,7 +133,8 @@ func LuaToArgument(state *lua.State, i int, one bool) (args.Argument, error) {
 			if err := luar.LuaToGo(state, i, &out); err != nil {
 				return nil, err
 			}
-			arguments = append(arguments, args.Must(out))
+
+			arguments = append(arguments, args.Must(luaInterfaceMapToArgument(state, out)))
 		} else if state.IsBoolean(i) {
 			arguments = append(arguments, args.Must(state.ToBoolean(i)))
 		} else if state.IsString(i) {
