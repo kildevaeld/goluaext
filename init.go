@@ -105,7 +105,7 @@ func RegisterLuaModule(state *lua.State, name string, luaString string, overwrit
 		}
 
 		if state.IsTable(-1) {
-			fmt.Printf("it's table")
+			//fmt.Printf("it's table")
 		}
 
 		return 1
