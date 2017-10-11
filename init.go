@@ -2,7 +2,6 @@ package goluaext
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/aarzilli/golua/lua"
 	args "github.com/kildevaeld/go-args"
