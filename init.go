@@ -80,7 +80,7 @@ func RegisterLuaModuleOnVM(state *lua.State, name string, luaString string, over
 		}
 
 		if state.IsTable(-1) {
-			fmt.Printf("it's table")
+			//fmt.Printf("it's table")
 		}
 
 		return 1

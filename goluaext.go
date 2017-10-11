@@ -350,7 +350,7 @@ func Init() *lua.State {
 	state.SetTop(top)
 
 	state.MustDoString(string(MustAsset("scripts/prelude.lua")))
-	RegisterLuaModule(state, "inspect", string(MustAsset("scripts/inspect.lua")), true)
+	RegisterLuaModuleOnVM(state, "inspect", string(MustAsset("scripts/inspect.lua")), true)
 
 	return state
 
