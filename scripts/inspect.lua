@@ -121,8 +121,10 @@ local function getToStringResultSafely(t, mt)
   local __tostring = type(mt) == 'table' and rawget(mt, '__tostring')
   local str, ok
   if type(__tostring) == 'function' then
-    ok, str = pcall(__tostring, t)
-    str = ok and str or 'error: ' .. tostring(str)
+    --ok, str = pcall(__tostring, t)
+    --str = ok and str or 'error: ' .. tostring(str)
+    str = __tostring(t)
+    --str = str --or 'error: ' .. tostring(str)
   end
   if type(str) == 'string' and #str > 0 then return str end
 end
